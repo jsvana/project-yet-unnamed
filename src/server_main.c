@@ -68,7 +68,9 @@ int main(int argc, char **argv) {
 
 		int cpid = fork();
 
-		if (cpid == 0) {
+		if (cpid < 0) {
+			ERR("Error creating child\n");
+		} else if (cpid == 0) {
 			clientFunc(sock, &clientInfo);
 		}
 	}
@@ -77,27 +79,51 @@ int main(int argc, char **argv) {
 }
 
 void clientFunc(int sock, struct sockaddr_in *sockInfo) {
+	char *sa = "SYN/ACK";
+	char *buff;
+	commandinfo *cinfo;
+
 	unsigned int ip = ntohl(sockInfo->sin_addr.s_addr);
 	LOG("Client connected at IP %d.%d.%d.%d\n", ip >> 24 & 255,
 		ip >> 16 & 255, ip >> 8 & 255, ip & 255);
 
-	char *msg;
-	int len = asprintf(&msg, "You are now connected from %d.%d.%d.%d\n",
-		ip >> 24 & 255, ip >> 16 & 255, ip >> 8 & 255, ip & 255);
+	readMessage(sock, (void *)&buff);
+	cinfo = parseCommand(buff);
+	free(buff);
+	if (cinfo->command != SYN) {
+		fprintf(stderr, "Unknown client protocol\n");
+		close(sock);
+		exit(1);
+	}
 
-	writeMessage(sock, msg, len);
-
-	char *buff;
+	writeMessage(sock, (void *)sa, strlen(sa));
 
 	readMessage(sock, (void *)&buff);
-
-	printf("%s", buff);
-
-	writeMessage(sock, (void *)buff, strlen(buff));
-
+	cinfo = parseCommand(buff);
 	free(buff);
+	if (cinfo->command != ACK) {
+		fprintf(stderr, "Unknown client protocol\n");
+		close(sock);
+		exit(1);
+	}
 
-	close(sock);
+	int running = TRUE;
+	int s;
+
+	while (running) {
+		s = readMessage(sock, (void *)&buff);
+		if (s == 0) {
+			LOG("Client %d.%d.%d.%d disconnected\n", ip >> 24 & 255, ip >> 16 & 255,
+				ip >> 8 & 255, ip & 255);
+			running = FALSE;
+			break;
+		}
+
+		writeMessage(sock, (void *)buff, strlen(buff));
+		LOG("Received \"%s\"\n", buff);
+		cinfo = parseCommand(buff);
+		free(buff);
+	}
 
 	exit(0);
 }

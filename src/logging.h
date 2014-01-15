@@ -33,7 +33,6 @@
 		fprintf(stdout, "[ERROR %d.%d %s:%d] ", (int)t.tv_sec, (int)t.tv_usec, \
 			__FILE__, __LINE__); \
 		fprintf(stdout, fmt, ##__VA_ARGS__); \
-		exit(1); \
 	}
 
 #endif
