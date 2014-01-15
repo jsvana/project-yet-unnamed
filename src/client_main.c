@@ -63,24 +63,7 @@ void logMessage(const char *msg, int source) {
 		origin = '>';
 	}
 
-	char *buff;
-	asprintf(&buff, "%c %s", origin, msg);
-	if (buff == NULL) {
-		fprintf(stderr, "Error allocating memory\n");
-		cleanup(0);
-	}
-
-	int h, w;
-	wmove(dispW, dispY, 1);
-	waddstr(dispW, buff);
-	wmove(dispW, dispY, -strlen(buff));
-	free(buff);
-	getmaxyx(dispW, h, w);
-	for (int i = strlen(msg) + 3; i < w; i++) {
-		mvwaddch(dispW, dispY, i, ' ');
-	}
-
-	++dispY;
+	wprintw(dispW, "\n%c %s", origin, msg);
 
 	wrefresh(dispW);
 }
@@ -97,6 +80,21 @@ int receiveMessage(int sock, char **msg) {
 	logMessage(*msg, SERVER);
 
 	return ret;
+}
+
+void handleCommand(char *command) {
+	char *buff;
+	commandinfo *cinfo = parseCommand(command);
+	switch (cinfo->command) {
+		case C_QUIT:
+			cleanup(0);
+			break;
+		default:
+			sendMessage(sock, command);
+			receiveMessage(sock, &buff);
+			free(buff);
+			break;
+	}
 }
 
 int main(int argc, char **argv) {
@@ -148,7 +146,7 @@ int main(int argc, char **argv) {
 	}
 	cinfo = parseCommand(buff);
 	free(buff);
-	if (cinfo->command != SYNACK) {
+	if (cinfo->command != C_SYNACK) {
 		fprintf(stderr, "Unkown server protocol\n");
 		exit(1);
 	}
@@ -180,9 +178,7 @@ int main(int argc, char **argv) {
 			wmove(inputW, 1, 1);
 
 			if (strlen(command) > 0) {
-				sendMessage(sock, command);
-				receiveMessage(sock, &buff);
-				free(buff);
+				handleCommand(command);
 			}
 		} else if (c == 127) {
 			if (pos > 0) {

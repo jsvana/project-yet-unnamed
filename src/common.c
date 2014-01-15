@@ -74,15 +74,17 @@ commandinfo *parseCommand(char *command) {
 	command[mark] = 0;
 
 	if (mark == 0) {
-		cinfo->command = NONE;
+		cinfo->command = C_NONE;
 	} else if (strcmp(command, "SYN") == 0) {
-		cinfo->command = SYN;
+		cinfo->command = C_SYN;
 	} else if (strcmp(command, "SYN/ACK") == 0) {
-		cinfo->command = SYNACK;
+		cinfo->command = C_SYNACK;
 	} else if (strcmp(command, "ACK") == 0) {
-		cinfo->command = ACK;
+		cinfo->command = C_ACK;
+	} else if (strcmp(command, "QUIT") == 0) {
+		cinfo->command = C_QUIT;
 	} else {
-		cinfo->command = UNKNOWN;
+		cinfo->command = C_UNKNOWN;
 	}
 
 	return cinfo;

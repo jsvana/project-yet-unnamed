@@ -8,11 +8,12 @@
 #endif
 
 // Commands
-#define UNKNOWN -1
-#define NONE 0
-#define SYN 1
-#define SYNACK 2
-#define ACK 3
+#define C_UNKNOWN -1
+#define C_NONE 0
+#define C_SYN 1
+#define C_SYNACK 2
+#define C_ACK 3
+#define C_QUIT 4
 
 typedef struct commandinfo commandinfo;
 struct commandinfo {
