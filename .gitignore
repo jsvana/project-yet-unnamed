@@ -1,0 +1,3 @@
+*.o
+build/bbs-client
+build/bbs-server
