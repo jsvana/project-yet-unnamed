@@ -16,8 +16,7 @@ struct config_node {
 	} data;
 };
 
-config_node *config_find_node(config_node **list, const char *node);
-config_node *config_find_for_set(config_node **list, const char *node);
+config_node *config_find(config_node **list, const char *node);
 
 // Helper func, but anyone can use
 char **node_name_to_array(const char *node);
