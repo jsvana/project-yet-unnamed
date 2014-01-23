@@ -15,6 +15,7 @@
 #define C_SYNACK 3
 #define C_ACK 4
 #define C_POSTS 5
+#define C_GET 6
 
 // Params
 #define P_UNKNOWN -1
@@ -25,12 +26,21 @@ typedef struct commandinfo commandinfo;
 struct commandinfo {
 	int command;
 	int param;
+	char **args;
 };
+
+#ifdef __linux__
+void *reallocf(void *ptr, size_t size);
+#endif
 
 int writeMessage(int fd, void *data, int len);
 int readMessage(int fd, void **buf);
 
+char **parseArguments(char *command);
+void freeArguments(char **args);
+
 commandinfo *parseCommand(char *command);
+void freeCommandInfo(commandinfo *cinfo);
 
 char *protocolEscape(const char *str);
 char *protocolUnescape(const char *str);

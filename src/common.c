@@ -4,8 +4,22 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef __linux__
+
+void *reallocf(void *ptr, size_t size) {
+	void *p = realloc(ptr, size);
+	if (p == NULL) {
+		free(ptr);
+		return NULL;
+	}
+	return p;
+}
+
+#endif
 
 int writeMessage(int fd, void *data, int len) {
 	int ret;
@@ -61,17 +75,73 @@ int readMessage(int fd, void **buf) {
 	return len;
 }
 
-static char **parseArguments(char *command) {
+char **parseArguments(char *command) {
 	char **args = malloc(sizeof(char *));
 	if (args == NULL) {
 		ERR("Error allocating memory\n");
 		exit(1);
 	}
 
+	int argCtr = 0;
 	int mark = 0;
 	int len = strlen(command);
 	char c = ' ';
-	while (mark < strlen(command)) {
+	char *p = command;
+	while (mark < len) {
+		args = reallocf(args, sizeof(char *) * (argCtr + 1));
+		if (args == NULL) {
+			ERR("Error allocating memory\n");
+			exit(1);
+		}
+
+		if (p[mark] == '"') {
+			++mark;
+			c = '"';
+		} else {
+			c = ' ';
+		}
+
+		p += mark;
+		len -= mark;
+		mark = 0;
+
+		while (p[mark] != c && mark < len) {
+			++mark;
+		}
+
+		args[argCtr] = malloc(sizeof(char) * (mark + 1));
+		if (args[argCtr] == NULL) {
+			ERR("Error allocating memory\n");
+			exit(1);
+		}
+		strncpy(args[argCtr], p, mark);
+		args[argCtr][mark] = 0;
+		if (c == '"') {
+			++mark;
+		}
+		++mark;
+		++argCtr;
+	}
+
+	args = reallocf(args, sizeof(char *) * (argCtr + 1));
+	if (args == NULL) {
+		ERR("Error allocating memory\n");
+		exit(1);
+	}
+	args[argCtr] = NULL;
+
+	return args;
+}
+
+void freeArguments(char **args) {
+	if (args == NULL) {
+		return;
+	}
+
+	int i = 0;
+	while (args[i]) {
+		free(args[i]);
+		++i;
 	}
 }
 
@@ -81,33 +151,47 @@ commandinfo *parseCommand(char *command) {
 		ERR("Error allocating memory\n");
 		exit(1);
 	}
-	int len = strlen(command);
-	int mark = 0;
-	while (command[mark] != ' ' && mark < len) {
-		++mark;
-	}
-	command[mark] = 0;
 
-	if (mark == 0) {
+	char **args = parseArguments(command);
+	cinfo->args = args;
+
+	if (!*args) {
 		cinfo->command = C_NONE;
-	} else if (strcmp(command, "QUIT") == 0) {
+	} else if (strcmp(args[0], "QUIT") == 0) {
 		cinfo->command = C_QUIT;
-	} else if (strcmp(command, "SYN") == 0) {
+	} else if (strcmp(args[0], "SYN") == 0) {
 		cinfo->command = C_SYN;
-	} else if (strcmp(command, "SYN/ACK") == 0) {
+	} else if (strcmp(args[0], "SYN/ACK") == 0) {
 		cinfo->command = C_SYNACK;
-	} else if (strcmp(command, "ACK") == 0) {
+	} else if (strcmp(args[0], "ACK") == 0) {
 		cinfo->command = C_ACK;
-	} else if (strcmp(command, "POSTS") == 0) {
+	} else if (strcmp(args[0], "POSTS") == 0) {
 		cinfo->command = C_POSTS;
-	} else if (strcmp(command, "GET") == 0) {
-		cinfo->command = C_POSTS;
-		if (strcmp())
+	} else if (strcmp(args[0], "GET") == 0) {
+		cinfo->command = C_GET;
+		if (args[1]) {
+			if (strcmp(args[1], "POSTS") == 0) {
+				cinfo->param = P_POSTS;
+			} else {
+				cinfo->param = P_UNKNOWN;
+			}
+		} else {
+			cinfo->param = P_NONE;
+		}
 	} else {
 		cinfo->command = C_UNKNOWN;
 	}
 
 	return cinfo;
+}
+
+void freeCommandInfo(commandinfo *cinfo) {
+	if (cinfo == NULL) {
+		return;
+	}
+
+	freeArguments(cinfo->args);
+	free(cinfo);
 }
 
 char *protocolEscape(const char *str) {

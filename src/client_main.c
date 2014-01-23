@@ -192,15 +192,20 @@ static int receiveMessage(int sock, char **msg) {
 static void handleCommand(char *command) {
 	char *buff;
 	commandinfo *cinfo = parseCommand(command);
+
 	switch (cinfo->command) {
 		case C_QUIT:
 			cleanup(0);
 			break;
 
-		case C_POSTS:
-			sendMessage(sock, command);
-			receiveMessage(sock, &buff);
-			free(buff);
+		case C_GET:
+			if (cinfo->param == P_POSTS) {
+				sendMessage(sock, command);
+				receiveMessage(sock, &buff);
+				free(buff);
+			} else {
+				logMessage(command, CLIENT);
+			}
 			break;
 
 		default:
@@ -209,4 +214,6 @@ static void handleCommand(char *command) {
 			free(buff);
 			break;
 	}
+
+	freeCommandInfo(cinfo);
 }

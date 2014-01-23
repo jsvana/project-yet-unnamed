@@ -1,3 +1,5 @@
 *.o
+*.dSYM
+.DS_Store
 build/bbs-client
 build/bbs-server
