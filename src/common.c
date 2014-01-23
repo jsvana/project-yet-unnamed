@@ -75,7 +75,7 @@ int readMessage(int fd, void **buf) {
 	return len;
 }
 
-char **parseArguments(char *command) {
+static char **parseArguments(char *command) {
 	char **args = malloc(sizeof(char *));
 	if (args == NULL) {
 		ERR("Error allocating memory\n");
@@ -133,7 +133,7 @@ char **parseArguments(char *command) {
 	return args;
 }
 
-void freeArguments(char **args) {
+static void freeArguments(char **args) {
 	if (args == NULL) {
 		return;
 	}
@@ -152,32 +152,41 @@ commandinfo *parseCommand(char *command) {
 		exit(1);
 	}
 
-	char **args = parseArguments(command);
-	cinfo->args = args;
+	cinfo->args = parseArguments(command);
+	char **args = cinfo->args;
+	cinfo->argCount = 0;
+	while (*args) {
+		++cinfo->argCount;
+		args++;
+	}
 
-	if (!*args) {
+	if (!*cinfo->args) {
 		cinfo->command = C_NONE;
-	} else if (strcmp(args[0], "QUIT") == 0) {
+	} else if (strcmp(cinfo->args[0], "QUIT") == 0) {
 		cinfo->command = C_QUIT;
-	} else if (strcmp(args[0], "SYN") == 0) {
+	} else if (strcmp(cinfo->args[0], "SYN") == 0) {
 		cinfo->command = C_SYN;
-	} else if (strcmp(args[0], "SYN/ACK") == 0) {
+	} else if (strcmp(cinfo->args[0], "SYN/ACK") == 0) {
 		cinfo->command = C_SYNACK;
-	} else if (strcmp(args[0], "ACK") == 0) {
+	} else if (strcmp(cinfo->args[0], "ACK") == 0) {
 		cinfo->command = C_ACK;
-	} else if (strcmp(args[0], "POSTS") == 0) {
+	} else if (strcmp(cinfo->args[0], "POSTS") == 0) {
 		cinfo->command = C_POSTS;
-	} else if (strcmp(args[0], "GET") == 0) {
+	} else if (strcmp(cinfo->args[0], "GET") == 0) {
 		cinfo->command = C_GET;
-		if (args[1]) {
-			if (strcmp(args[1], "POSTS") == 0) {
+		if (cinfo->args[1]) {
+			if (strcmp(cinfo->args[1], "POSTS") == 0) {
 				cinfo->param = P_POSTS;
+			} else if (strcmp(cinfo->args[1], "POST") == 0) {
+				cinfo->param = P_POST;
 			} else {
 				cinfo->param = P_UNKNOWN;
 			}
 		} else {
 			cinfo->param = P_NONE;
 		}
+	} else if (strcmp(cinfo->args[0], "ERROR") == 0) {
+		cinfo->command = C_ERROR;
 	} else {
 		cinfo->command = C_UNKNOWN;
 	}
@@ -195,7 +204,7 @@ void freeCommandInfo(commandinfo *cinfo) {
 }
 
 char *protocolEscape(const char *str) {
-	char *out = malloc(sizeof(char) * strlen(str) * 2);
+	char *out = malloc(sizeof(char) * (strlen(str) * 2 + 1));
 	int outIndex = 0;
 
 	for (int i = 0; i < strlen(str); i++) {
@@ -206,6 +215,8 @@ char *protocolEscape(const char *str) {
 			out[outIndex++] = str[i];
 		}
 	}
+
+	out[outIndex] = 0;
 
 	return out;
 }

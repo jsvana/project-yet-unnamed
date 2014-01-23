@@ -16,16 +16,19 @@
 #define C_ACK 4
 #define C_POSTS 5
 #define C_GET 6
+#define C_ERROR 7
 
 // Params
 #define P_UNKNOWN -1
 #define P_NONE 0
 #define P_POSTS 1
+#define P_POST 2
 
 typedef struct commandinfo commandinfo;
 struct commandinfo {
 	int command;
 	int param;
+	int argCount;
 	char **args;
 };
 
@@ -35,9 +38,6 @@ void *reallocf(void *ptr, size_t size);
 
 int writeMessage(int fd, void *data, int len);
 int readMessage(int fd, void **buf);
-
-char **parseArguments(char *command);
-void freeArguments(char **args);
 
 commandinfo *parseCommand(char *command);
 void freeCommandInfo(commandinfo *cinfo);

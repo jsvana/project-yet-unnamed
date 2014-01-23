@@ -17,6 +17,7 @@ MYSQL *conn;
 
 static void clientFunc(int sock, struct sockaddr_in *sockInfo);
 static void handleCommand(int sock, char *command);
+static void sendString(int sock, const char *str);
 
 int main(int argc, char **argv) {
 	if (argc < 2) {
@@ -147,55 +148,112 @@ static void handleCommand(int sock, char *command) {
 	LOG("Received \"%s\"\n", command);
 	commandinfo *cinfo = parseCommand(command);
 	char *msg;
-	int len;
+	int len, id;
+	MYSQL_RES *res;
+	MYSQL_ROW row;
+	char *ret;
 
 	switch (cinfo->command) {
 		case C_GET:
-			if (mysql_query(conn, "SELECT `u`.`username`, `p`.`title`, `p`.`id`"
-					" FROM `posts` `p`"
-					" LEFT JOIN `users` `u` ON `p`.`creator_id`=`u`.`id`")) {
-				// TODO: Handle failure
-				ERR("Error querying database: %s\n", mysql_error(conn));
-				exit(1);
-			}
+			switch (cinfo->param) {
+				case P_POSTS:
+					if (mysql_query(conn, "SELECT `u`.`username`, `p`.`title`, `p`.`id`"
+							" FROM `posts` `p`"
+							" LEFT JOIN `users` `u` ON `p`.`creator_id`=`u`.`id`")) {
+						// TODO: Handle failure
+						ERR("Error querying database: %s\n", mysql_error(conn));
+						exit(1);
+					}
 
-			MYSQL_RES *res = mysql_store_result(conn);
-			MYSQL_ROW row;
-			char *ret;
-			asprintf(&ret, "POSTS");
-			if (ret == NULL) {
-				ERR("Error allocating memory\n");
-				exit(1);
-			}
+					res = mysql_store_result(conn);
+					asprintf(&ret, "POSTS");
+					if (ret == NULL) {
+						ERR("Error allocating memory\n");
+						exit(1);
+					}
 
-			while ((row = mysql_fetch_row(res))) {
-				char *user = protocolEscape(row[0]);
-				char *msg = protocolEscape(row[1]);
-				char *r;
-				asprintf(&r, " \"%s\" \"%s\" \"%s\"", user, msg, row[2]);
-				ret = reallocf(ret, (strlen(ret) + strlen(r)) * sizeof(char));
-				if (ret == NULL) {
-					ERR("Error allocating memory\n");
-					exit(1);
-				}
-				strcat(ret, r);
-				free(r);
-				free(user);
-				free(msg);
-			}
+					while ((row = mysql_fetch_row(res))) {
+						char *user = protocolEscape(row[0]);
+						char *msg = protocolEscape(row[1]);
+						char *r;
+						asprintf(&r, " \"%s\" \"%s\" \"%s\"", user, msg, row[2]);
+						ret = reallocf(ret, (strlen(ret) + strlen(r)) * sizeof(char));
+						if (ret == NULL) {
+							ERR("Error allocating memory\n");
+							exit(1);
+						}
+						strcat(ret, r);
+						free(r);
+						free(user);
+						free(msg);
+					}
 
-			writeMessage(sock, (void *)ret, strlen(ret));
-			free(ret);
-			mysql_free_result(res);
+					writeMessage(sock, (void *)ret, strlen(ret));
+					free(ret);
+					mysql_free_result(res);
+					break;
+
+				case P_POST:
+					if (cinfo->argCount != 3) {
+						sendString(sock, "ERROR");
+					} else {
+						id = atoi(cinfo->args[2]);
+						char *sql;
+						int len = asprintf(&sql, "SELECT `u`.`username`, `p`.`title`,"
+								" `p`.`content` FROM `posts` `p` LEFT JOIN `users` `u`"
+								" ON `p`.`creator_id`=`u`.`id` WHERE `p`.`id`=%d", id);
+						if (&sql == NULL) {
+							ERR("Error allocating memory\n");
+							exit(1);
+						}
+
+						if (mysql_query(conn, sql)) {
+							// TODO: Handle failure
+							ERR("Error querying database: %s\n", mysql_error(conn));
+							exit(1);
+						}
+
+						res = mysql_store_result(conn);
+						row = mysql_fetch_row(res);
+
+						char *user = protocolEscape(row[0]);
+						char *title = protocolEscape(row[1]);
+						char *content = protocolEscape(row[2]);
+
+						asprintf(&ret, "POST \"%s\" \"%s\" \"%s\"", user, title, content);
+						if (ret == NULL) {
+							ERR("Error allocating memory\n");
+							exit(1);
+						}
+
+						free(user);
+						free(title);
+						free(content);
+
+						writeMessage(sock, (void *)ret, strlen(ret));
+						free(ret);
+						mysql_free_result(res);
+					}
+					break;
+
+				default:
+					sendString(sock, "UNKNOWN");
+					break;
+			}
 			break;
 
 		default:
-			len = asprintf(&msg, "UNKNOWN");
-			if (msg == NULL) {
-				ERR("Error allocating memory\n");
-				exit(1);
-			}
-			writeMessage(sock, (void *)msg, len);
+			sendString(sock, "UNKNOWN");
 			break;
 	}
+}
+
+static void sendString(int sock, const char *str) {
+	char *msg;
+	int len = asprintf(&msg, "%s", str);
+	if (msg == NULL) {
+		ERR("Error allocating memory\n");
+		exit(1);
+	}
+	writeMessage(sock, (void *)msg, len);
 }

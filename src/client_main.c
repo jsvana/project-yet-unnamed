@@ -203,6 +203,10 @@ static void handleCommand(char *command) {
 				sendMessage(sock, command);
 				receiveMessage(sock, &buff);
 				free(buff);
+			} else if (cinfo->param == P_POST) {
+				sendMessage(sock, command);
+				receiveMessage(sock, &buff);
+				free(buff);
 			} else {
 				logMessage(command, CLIENT);
 			}
