@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include "common.h"
 #include "logging.h"
 
@@ -22,80 +20,15 @@ int sock;
 WINDOW *dispW;
 WINDOW *inputW;
 
-static void cleanup(int sig) {
-	close(sock);
+static void cleanup(int sig);
 
-	endwin();
+static int joinServer(char *host, int port);
 
-	exit(0);
-}
+static void logMessage(const char *msg, int source);
+static void sendMessage(int sock, const char *msg);
+static int receiveMessage(int sock, char **msg);
 
-int joinServer(char *host, int port) {
-	int sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock < 0) {
-		perror("Error opening socket");
-		exit(1);
-	}
-
-	struct sockaddr_in serv;
-	serv.sin_family = AF_INET;
-	serv.sin_port = htons(port);
-	serv.sin_addr.s_addr = inet_addr(host);
-
-	if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr_in)) < 0) {
-		perror("Error connecting to socket");
-		close(sock);
-		exit(1);
-	}
-
-	return sock;
-}
-
-int dispY = 0;
-
-void logMessage(const char *msg, int source) {
-	char origin = ' ';
-	if (source == SERVER) {
-		wattron(dispW, COLOR_PAIR(2));
-		origin = '<';
-	} else if (source == CLIENT) {
-		wattron(dispW, COLOR_PAIR(4));
-		origin = '>';
-	}
-
-	wprintw(dispW, "\n%c %s", origin, msg);
-
-	wrefresh(dispW);
-}
-
-void sendMessage(int sock, const char *msg) {
-	writeMessage(sock, (void *)msg, strlen(msg));
-
-	logMessage(msg, CLIENT);
-}
-
-int receiveMessage(int sock, char **msg) {
-	int ret = readMessage(sock, (void *)msg);
-
-	logMessage(*msg, SERVER);
-
-	return ret;
-}
-
-void handleCommand(char *command) {
-	char *buff;
-	commandinfo *cinfo = parseCommand(command);
-	switch (cinfo->command) {
-		case C_QUIT:
-			cleanup(0);
-			break;
-		default:
-			sendMessage(sock, command);
-			receiveMessage(sock, &buff);
-			free(buff);
-			break;
-	}
-}
+static void handleCommand(char *command);
 
 int main(int argc, char **argv) {
 	char *buff;
@@ -196,4 +129,84 @@ int main(int argc, char **argv) {
 	cleanup(0);
 
 	return 0;
+}
+
+static void cleanup(int sig) {
+	close(sock);
+
+	endwin();
+
+	exit(0);
+}
+
+static int joinServer(char *host, int port) {
+	int sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock < 0) {
+		perror("Error opening socket");
+		exit(1);
+	}
+
+	struct sockaddr_in serv;
+	serv.sin_family = AF_INET;
+	serv.sin_port = htons(port);
+	serv.sin_addr.s_addr = inet_addr(host);
+
+	if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr_in)) < 0) {
+		perror("Error connecting to socket");
+		close(sock);
+		exit(1);
+	}
+
+	return sock;
+}
+
+static void logMessage(const char *msg, int source) {
+	char origin = ' ';
+	if (source == SERVER) {
+		wattron(dispW, COLOR_PAIR(2));
+		origin = '<';
+	} else if (source == CLIENT) {
+		wattron(dispW, COLOR_PAIR(4));
+		origin = '>';
+	}
+
+	wprintw(dispW, "\n%c %s", origin, msg);
+
+	wrefresh(dispW);
+}
+
+static void sendMessage(int sock, const char *msg) {
+	writeMessage(sock, (void *)msg, strlen(msg));
+
+	logMessage(msg, CLIENT);
+}
+
+static int receiveMessage(int sock, char **msg) {
+	int ret = readMessage(sock, (void *)msg);
+
+	logMessage(*msg, SERVER);
+
+	return ret;
+}
+
+static void handleCommand(char *command) {
+	char *buff;
+	commandinfo *cinfo = parseCommand(command);
+	switch (cinfo->command) {
+		case C_QUIT:
+			cleanup(0);
+			break;
+
+		case C_POSTS:
+			sendMessage(sock, command);
+			receiveMessage(sock, &buff);
+			free(buff);
+			break;
+
+		default:
+			sendMessage(sock, command);
+			receiveMessage(sock, &buff);
+			free(buff);
+			break;
+	}
 }

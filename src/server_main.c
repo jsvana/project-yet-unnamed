@@ -1,9 +1,9 @@
 #include "common.h"
 #include "logging.h"
 
-#define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <errno.h>
+#include <mysql.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +13,10 @@
 
 #define MAX_CONNECTIONS 10
 
-void clientFunc(int sock, struct sockaddr_in *sockInfo);
+MYSQL *conn;
+
+static void clientFunc(int sock, struct sockaddr_in *sockInfo);
+static void handleCommand(int sock, char *command);
 
 int main(int argc, char **argv) {
 	if (argc < 2) {
@@ -66,6 +69,7 @@ int main(int argc, char **argv) {
 		socklen_t structSize = sizeof(struct sockaddr_in);
 		int sock = accept(servSock, (struct sockaddr *)&clientInfo, &structSize);
 
+		// TODO: Move to pthreads
 		int cpid = fork();
 
 		if (cpid < 0) {
@@ -78,7 +82,7 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
-void clientFunc(int sock, struct sockaddr_in *sockInfo) {
+static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 	char *sa = "SYN/ACK";
 	char *buff;
 	commandinfo *cinfo;
@@ -90,7 +94,7 @@ void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 	readMessage(sock, (void *)&buff);
 	cinfo = parseCommand(buff);
 	free(buff);
-	if (cinfo->command != SYN) {
+	if (cinfo->command != C_SYN) {
 		fprintf(stderr, "Unknown client protocol\n");
 		close(sock);
 		exit(1);
@@ -101,9 +105,22 @@ void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 	readMessage(sock, (void *)&buff);
 	cinfo = parseCommand(buff);
 	free(buff);
-	if (cinfo->command != ACK) {
+	if (cinfo->command != C_ACK) {
 		fprintf(stderr, "Unknown client protocol\n");
 		close(sock);
+		exit(1);
+	}
+
+	// TODO: Move into other file
+	conn = mysql_init(NULL);
+	if (conn == NULL) {
+		ERR("Error: %s\n", mysql_error(conn));
+		exit(1);
+	}
+
+	if (mysql_real_connect(conn, "localhost", "root", "linked", "bbs", 0, NULL, 0)
+			== NULL) {
+		ERR("Error: %s\n", mysql_error(conn));
 		exit(1);
 	}
 
@@ -119,11 +136,66 @@ void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 			break;
 		}
 
-		writeMessage(sock, (void *)buff, strlen(buff));
-		LOG("Received \"%s\"\n", buff);
-		cinfo = parseCommand(buff);
+		handleCommand(sock, buff);
 		free(buff);
 	}
 
 	exit(0);
+}
+
+static void handleCommand(int sock, char *command) {
+	LOG("Received \"%s\"\n", command);
+	commandinfo *cinfo = parseCommand(command);
+	char *msg;
+	int len;
+
+	switch (cinfo->command) {
+		case C_GET:
+			if (mysql_query(conn, "SELECT `u`.`username`, `p`.`title`, `p`.`id`"
+					" FROM `posts` `p`"
+					" LEFT JOIN `users` `u` ON `p`.`creator_id`=`u`.`id`")) {
+				// TODO: Handle failure
+				ERR("Error querying database: %s\n", mysql_error(conn));
+				exit(1);
+			}
+
+			MYSQL_RES *res = mysql_store_result(conn);
+			MYSQL_ROW row;
+			char *ret;
+			asprintf(&ret, "POSTS");
+			if (ret == NULL) {
+				ERR("Error allocating memory\n");
+				exit(1);
+			}
+
+			while ((row = mysql_fetch_row(res))) {
+				char *user = protocolEscape(row[0]);
+				char *msg = protocolEscape(row[1]);
+				char *r;
+				asprintf(&r, " \"%s\" \"%s\" \"%s\"", user, msg, row[2]);
+				ret = reallocf(ret, (strlen(ret) + strlen(r)) * sizeof(char));
+				if (ret == NULL) {
+					ERR("Error allocating memory\n");
+					exit(1);
+				}
+				strcat(ret, r);
+				free(r);
+				free(user);
+				free(msg);
+			}
+
+			writeMessage(sock, (void *)ret, strlen(ret));
+			free(ret);
+			mysql_free_result(res);
+			break;
+
+		default:
+			len = asprintf(&msg, "UNKNOWN");
+			if (msg == NULL) {
+				ERR("Error allocating memory\n");
+				exit(1);
+			}
+			writeMessage(sock, (void *)msg, len);
+			break;
+	}
 }
