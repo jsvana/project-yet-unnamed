@@ -1,5 +1,4 @@
-#ifndef __LOGGING_H
-#define __LOGGING_H
+#pragma once
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,5 +33,3 @@
 			__FILE__, __LINE__); \
 		fprintf(stdout, fmt, ##__VA_ARGS__); \
 	}
-
-#endif

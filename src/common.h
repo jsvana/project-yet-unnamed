@@ -1,5 +1,4 @@
-#ifndef _COMMON_H
-#define _COMMON_H
+#pragma once
 
 // Best make sure these exist
 #ifndef TRUE
@@ -63,5 +62,3 @@ char *protocolEscape(const char *str);
 char *protocolEscapen(const char *str, int n);
 char *protocolUnescape(const char *str);
 char *protocolUnescapen(const char *str, int n);
-
-#endif

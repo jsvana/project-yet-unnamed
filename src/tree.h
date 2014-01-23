@@ -1,4 +1,4 @@
-#ifndef _TREE_H
+#pragma once
 
 #include <stdarg.h>
 
@@ -26,5 +26,3 @@ char **node_name_to_array(const char *node);
 void config_tag_node(config_node **head, const char *node, int t, ...);
 void config_free(config_node **node);
 void config_load(config_node **node, const char *file);
-
-#endif
