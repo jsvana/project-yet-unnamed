@@ -1,3 +1,4 @@
+#include "bbs_mysql.h"
 #include "common.h"
 #include "logging.h"
 
@@ -5,6 +6,7 @@
 #include <errno.h>
 #include <mysql.h>
 #include <netinet/in.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +20,7 @@ MYSQL *conn;
 static void clientFunc(int sock, struct sockaddr_in *sockInfo);
 static void handleCommand(int sock, char *command);
 static void sendString(int sock, const char *str);
+static void sendStringf(int sock, const char *str, ...);
 
 int main(int argc, char **argv) {
 	if (argc < 2) {
@@ -157,15 +160,10 @@ static void handleCommand(int sock, char *command) {
 		case C_GET:
 			switch (cinfo->param) {
 				case P_POSTS:
-					if (mysql_query(conn, "SELECT `u`.`username`, `p`.`title`, `p`.`id`"
-							" FROM `posts` `p`"
-							" LEFT JOIN `users` `u` ON `p`.`creator_id`=`u`.`id`")) {
-						// TODO: Handle failure
-						ERR("Error querying database: %s\n", mysql_error(conn));
-						exit(1);
-					}
+					res = bbs_query(conn, "SELECT `u`.`username`, `p`.`title`, `p`.`id`"
+						" FROM `posts` `p`"
+						" LEFT JOIN `users` `u` ON `p`.`creator_id`=`u`.`id`");
 
-					res = mysql_store_result(conn);
 					asprintf(&ret, "POSTS");
 					if (ret == NULL) {
 						ERR("Error allocating memory\n");
@@ -199,39 +197,21 @@ static void handleCommand(int sock, char *command) {
 					} else {
 						id = atoi(cinfo->args[2]);
 						char *sql;
-						int len = asprintf(&sql, "SELECT `u`.`username`, `p`.`title`,"
+						res = bbs_queryf(conn, "SELECT `u`.`username`, `p`.`title`,"
 								" `p`.`content` FROM `posts` `p` LEFT JOIN `users` `u`"
 								" ON `p`.`creator_id`=`u`.`id` WHERE `p`.`id`=%d", id);
-						if (&sql == NULL) {
-							ERR("Error allocating memory\n");
-							exit(1);
-						}
 
-						if (mysql_query(conn, sql)) {
-							// TODO: Handle failure
-							ERR("Error querying database: %s\n", mysql_error(conn));
-							exit(1);
-						}
-
-						res = mysql_store_result(conn);
 						row = mysql_fetch_row(res);
 
 						char *user = protocolEscape(row[0]);
 						char *title = protocolEscape(row[1]);
 						char *content = protocolEscape(row[2]);
 
-						asprintf(&ret, "POST \"%s\" \"%s\" \"%s\"", user, title, content);
-						if (ret == NULL) {
-							ERR("Error allocating memory\n");
-							exit(1);
-						}
+						sendStringf(sock, "POST \"%s\" \"%s\" \"%s\"", user, title, content);
 
 						free(user);
 						free(title);
 						free(content);
-
-						writeMessage(sock, (void *)ret, strlen(ret));
-						free(ret);
 						mysql_free_result(res);
 					}
 					break;
@@ -249,11 +229,19 @@ static void handleCommand(int sock, char *command) {
 }
 
 static void sendString(int sock, const char *str) {
+	writeMessage(sock, (void *)str, strlen(str));
+}
+
+static void sendStringf(int sock, const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
 	char *msg;
-	int len = asprintf(&msg, "%s", str);
+	int len = vasprintf(&msg, fmt, ap);
+	va_end(ap);
 	if (msg == NULL) {
 		ERR("Error allocating memory\n");
 		exit(1);
 	}
+
 	writeMessage(sock, (void *)msg, len);
 }

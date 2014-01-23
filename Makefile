@@ -3,7 +3,7 @@ CC=clang
 CFLAGS=-g -D_GNU_SOURCE
 
 S_PROG=build/bbs-server
-S_OBJS=src/server_main.o src/common.o
+S_OBJS=src/server_main.o src/common.o src/bbs_mysql.o
 S_CFLAGS=$(shell mysql_config --cflags)
 S_LIBS=$(shell mysql_config --libs)
 
