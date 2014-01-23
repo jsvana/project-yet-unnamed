@@ -235,6 +235,16 @@ void config_load(config_node **node, const char *file) {
 }
 
 /*
+
+conf = {
+	this = {
+		is = {
+			madness = "world",
+			sparta = "hello",
+		}
+	}
+}
+
 int main(int argc, char *argv[]) {
 	// Config stuff
 	config_node *config = NULL;
