@@ -7,6 +7,10 @@
 #define FALSE 0
 #endif
 
+// Message sources
+#define MSG_INCOMING 0
+#define MSG_OUTGOING 1
+
 // Commands
 #define C_UNKNOWN -1
 #define C_NONE 0
@@ -52,10 +56,12 @@ void *reallocf(void *ptr, size_t size);
 int writeMessage(int fd, void *data, int len);
 int readMessage(int fd, void **buf);
 
-commandinfo *parseCommand(char *command);
+commandinfo *parseCommand(char *command, int incoming);
 void freeCommandInfo(commandinfo *cinfo);
 
 char *protocolEscape(const char *str);
+char *protocolEscapen(const char *str, int n);
 char *protocolUnescape(const char *str);
+char *protocolUnescapen(const char *str, int n);
 
 #endif

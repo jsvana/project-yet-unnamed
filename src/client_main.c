@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 		LOG("Server disconnected\n");
 		cleanup(0);
 	}
-	cinfo = parseCommand(buff);
+	cinfo = parseCommand(buff, MSG_INCOMING);
 	free(buff);
 	if (cinfo->command != C_SYNACK) {
 		fprintf(stderr, "Unkown server protocol\n");
@@ -191,7 +191,7 @@ static int receiveMessage(int sock, char **msg) {
 
 static void handleCommand(char *command) {
 	char *buff;
-	commandinfo *cinfo = parseCommand(command);
+	commandinfo *cinfo = parseCommand(command, MSG_OUTGOING);
 
 	switch (cinfo->command) {
 		case C_QUIT:
@@ -206,7 +206,13 @@ static void handleCommand(char *command) {
 			} else if (cinfo->param == P_POST) {
 				sendMessage(sock, command);
 				receiveMessage(sock, &buff);
+				freeCommandInfo(cinfo);
+				cinfo = parseCommand(buff, MSG_INCOMING);
 				free(buff);
+
+				if (cinfo->argCount >= 4) {
+					logMessage(cinfo->args[3], CLIENT);
+				}
 			} else {
 				logMessage(command, CLIENT);
 			}

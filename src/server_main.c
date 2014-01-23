@@ -96,7 +96,7 @@ static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 		ip >> 16 & 255, ip >> 8 & 255, ip & 255);
 
 	readMessage(sock, (void *)&buff);
-	cinfo = parseCommand(buff);
+	cinfo = parseCommand(buff, MSG_INCOMING);
 	free(buff);
 	if (cinfo->command != C_SYN) {
 		fprintf(stderr, "Unknown client protocol\n");
@@ -107,7 +107,7 @@ static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 	writeMessage(sock, (void *)sa, strlen(sa));
 
 	readMessage(sock, (void *)&buff);
-	cinfo = parseCommand(buff);
+	cinfo = parseCommand(buff, MSG_INCOMING);
 	free(buff);
 	if (cinfo->command != C_ACK) {
 		fprintf(stderr, "Unknown client protocol\n");
@@ -148,7 +148,7 @@ static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 
 static void handleCommand(int sock, char *command) {
 	LOG("Received \"%s\"\n", command);
-	commandinfo *cinfo = parseCommand(command);
+	commandinfo *cinfo = parseCommand(command, MSG_INCOMING);
 	char *msg;
 	int len, id;
 	MYSQL_RES *res;

@@ -75,7 +75,7 @@ int readMessage(int fd, void **buf) {
 	return len;
 }
 
-static char **parseArguments(char *command) {
+static char **parseArguments(char *command, int source) {
 	char **args = malloc(sizeof(char *));
 	if (args == NULL) {
 		ERR("Error allocating memory\n");
@@ -107,6 +107,9 @@ static char **parseArguments(char *command) {
 
 		while (p[mark] != c && mark < len) {
 			++mark;
+			if (c == '"' && p[mark] == c && mark > 0 && p[mark - 1] == '\\') {
+				++mark;
+			}
 		}
 
 		args[argCtr] = malloc(sizeof(char) * (mark + 1));
@@ -114,8 +117,13 @@ static char **parseArguments(char *command) {
 			ERR("Error allocating memory\n");
 			exit(1);
 		}
-		strncpy(args[argCtr], p, mark);
 		args[argCtr][mark] = 0;
+		if (source == MSG_INCOMING) {
+			args[argCtr] = protocolUnescapen(p, mark);
+		} else {
+			args[argCtr] = protocolEscapen(p, mark);
+		}
+		//strncpy(args[argCtr], p, mark);
 		if (c == '"') {
 			++mark;
 		}
@@ -145,14 +153,14 @@ static void freeArguments(char **args) {
 	}
 }
 
-commandinfo *parseCommand(char *command) {
+commandinfo *parseCommand(char *command, int source) {
 	commandinfo *cinfo = malloc(sizeof(commandinfo));
 	if (cinfo == NULL) {
 		ERR("Error allocating memory\n");
 		exit(1);
 	}
 
-	cinfo->args = parseArguments(command);
+	cinfo->args = parseArguments(command, source);
 	char **args = cinfo->args;
 	cinfo->argCount = 0;
 	while (*args) {
@@ -204,10 +212,14 @@ void freeCommandInfo(commandinfo *cinfo) {
 }
 
 char *protocolEscape(const char *str) {
-	char *out = malloc(sizeof(char) * (strlen(str) * 2 + 1));
+	return protocolEscapen(str, strlen(str));
+}
+
+char *protocolEscapen(const char *str, int n) {
+	char *out = malloc(sizeof(char) * (n * 2 + 1));
 	int outIndex = 0;
 
-	for (int i = 0; i < strlen(str); i++) {
+	for (int i = 0; i < n; i++) {
 		if (str[i] == '"') {
 			out[outIndex++] = '\\';
 			out[outIndex++] = '"';
@@ -222,9 +234,13 @@ char *protocolEscape(const char *str) {
 }
 
 char *protocolUnescape(const char *str) {
-	char *out = malloc(sizeof(char) * strlen(str));
+	return protocolUnescapen(str, strlen(str));
+}
+
+char *protocolUnescapen(const char *str, int n) {
+	char *out = malloc(sizeof(char) * n);
 	int outIndex = 0;
-	int len = strlen(str);
+	int len = n;
 
 	for (int i = 0; i < len; i++) {
 		if (i < len && str[i] == '\\' && str[i + 1] == '"') {
@@ -234,6 +250,8 @@ char *protocolUnescape(const char *str) {
 			out[outIndex++] = str[i];
 		}
 	}
+
+	out[outIndex] = 0;
 
 	return out;
 }
