@@ -24,6 +24,19 @@
 #define P_POSTS 1
 #define P_POST 2
 
+typedef struct user user;
+struct user {
+	char *username;
+};
+
+typedef struct post post;
+struct post {
+	long long authorID;
+	char *title;
+	char *postDate;
+	char *content;
+};
+
 typedef struct commandinfo commandinfo;
 struct commandinfo {
 	int command;

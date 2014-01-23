@@ -115,7 +115,6 @@ static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 		exit(1);
 	}
 
-	// TODO: Move into other file
 	conn = mysql_init(NULL);
 	if (conn == NULL) {
 		ERR("Error: %s\n", mysql_error(conn));
