@@ -20,14 +20,45 @@ int sock;
 WINDOW *dispW;
 WINDOW *inputW;
 
+/**
+ * Closes in-use resources and exits. Used to catch ^C
+ * @param sig Signal passed (unused)
+ */
 static void cleanup(int sig);
 
+/**
+ * Connects to BBS server
+ * @param host Host to connect to
+ * @param port Port on host
+ */
 static int joinServer(char *host, int port);
 
+/**
+ * Logs message to display window
+ * @param msg Message to log
+ * @param source Source of message (CLIENT or SERVER)
+ */
 static void logMessage(const char *msg, int source);
+
+/**
+ * Sends message over socket
+ * @param sock Socket over which message is sent
+ * @param msg Message to send
+ */
 static void sendMessage(int sock, const char *msg);
+
+/**
+ * Receives a message sent over socket, allocates space, and writes to msg
+ * @param sock Socket over which message is received
+ * @param msg Received message (allocated)
+ * @return Number of bytes read
+ */
 static int receiveMessage(int sock, char **msg);
 
+/**
+ * Helper function to run entered command
+ * @param command Command to run
+ */
 static void handleCommand(char *command);
 
 int main(int argc, char **argv) {

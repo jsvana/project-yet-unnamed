@@ -13,14 +13,39 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+// Maximum number of server connections
 #define MAX_CONNECTIONS 10
 
 MYSQL *conn;
 
+/**
+ * Client connection function
+ * @param sock Client socket
+ * @param sockInfo Client connection information
+ */
 static void clientFunc(int sock, struct sockaddr_in *sockInfo);
+
+/**
+ * Handles commands from client
+ * @param sock Client socket
+ * @param command Client command
+ */
 static void handleCommand(int sock, char *command);
+
+/**
+ * Sends string over socket (convenience wrapper around writeMessage)
+ * @param sock Socket over which string is sent
+ * @param str String to be sent
+ */
 static void sendString(int sock, const char *str);
-static void sendStringf(int sock, const char *str, ...);
+
+/**
+ * Format string wrapper around sendString
+ * @param sock Socket over which string is sent
+ * @param fmt Format string
+ * @param ... Format string arguments
+ */
+static void sendStringf(int sock, const char *fmt, ...);
 
 int main(int argc, char **argv) {
 	if (argc < 2) {
