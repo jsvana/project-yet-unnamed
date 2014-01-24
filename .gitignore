@@ -4,3 +4,4 @@
 build/bbs-client
 build/bbs-server
 build/seed
+src/utils/__tests__/mqueue-test
