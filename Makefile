@@ -10,7 +10,7 @@ S_CFLAGS=$(MYSQL_CFLAGS)
 S_LIBS=$(MYSQL_LIBS)
 
 C_PROG=build/bbs-client
-C_OBJS=src/client_main.o src/common.o
+C_OBJS=src/client_main.o src/common.o src/utils/mqueue.o
 C_LIBS=-lncurses
 
 SEED_PROG=build/seed

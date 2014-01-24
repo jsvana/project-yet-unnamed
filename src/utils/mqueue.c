@@ -82,7 +82,7 @@ void mqueue_enqueue(mqueue *m, void *data, size_t size) {
 	t->prev = mn;
 	++m->size;
 	if (m->size == 1) {
-		pthread_cond_signal(&m->empty);
+		pthread_cond_broadcast(&m->empty);
 	}
 
 	pthread_mutex_unlock(&m->lock);
@@ -105,7 +105,7 @@ void *mqueue_dequeue(mqueue *m) {
 
 	pthread_mutex_lock(&m->lock);
 
-	if (m->size == 0) {
+	while (m->size == 0) {
 		pthread_cond_wait(&m->empty, &m->lock);
 	}
 

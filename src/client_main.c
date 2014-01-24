@@ -1,5 +1,6 @@
 #include "common.h"
 #include "logging.h"
+#include "utils/mqueue.h"
 
 #include <arpa/inet.h>
 #include <curses.h>
@@ -19,6 +20,19 @@
 int sock;
 WINDOW *dispW;
 WINDOW *inputW;
+mqueue *events;
+
+typedef struct thread_args thread_args;
+struct thread_args {
+	int sock;
+	mqueue *events;
+};
+
+typedef struct msg_command msg_command;
+struct msg_command {
+	int source;
+	char *command;
+};
 
 /**
  * Closes in-use resources and exits. Used to catch ^C
@@ -61,6 +75,10 @@ static int receiveMessage(int sock, char **msg);
  */
 static void handleCommand(char *command);
 
+static void *networkThread(void *args);
+
+static void *eventThread(void *args);
+
 int main(int argc, char **argv) {
 	char *buff;
 	char *s = "SYN";
@@ -102,8 +120,38 @@ int main(int argc, char **argv) {
 
 	signal(SIGINT, cleanup);
 
+	// Create event thread
+	pthread_t networkThreadID;
+	thread_args *args = malloc(sizeof(thread_args));
+	if (args == NULL) {
+		fprintf(stderr, "Error allocating memory\n");
+		exit(1);
+	}
+	args->events = events;
+	args->sock = sock;
+	printf("sock: %d\n", sock);
+	if (pthread_create(&networkThreadID, NULL, networkThread, (void *)args)) {
+		fprintf(stderr, "Error creating thread\n");
+		exit(1);
+	}
+
+	pthread_t eventThreadID;
+	args = malloc(sizeof(thread_args));
+	if (args == NULL) {
+		fprintf(stderr, "Error allocating memory\n");
+		exit(1);
+	}
+	args->events = events;
+	args->sock = sock;
+	printf("sock: %d\n", sock);
+	if (pthread_create(&eventThreadID, NULL, eventThread, (void *)args)) {
+		fprintf(stderr, "Error creating thread\n");
+		exit(1);
+	}
+
 	sendMessage(sock, s);
 
+	/*
 	if (!receiveMessage(sock, &buff)) {
 		LOG("Server disconnected\n");
 		cleanup(0);
@@ -111,9 +159,10 @@ int main(int argc, char **argv) {
 	cinfo = parseCommand(buff, MSG_INCOMING);
 	free(buff);
 	if (cinfo->command != C_SYNACK) {
-		fprintf(stderr, "Unkown server protocol\n");
+		fprintf(stderr, "Unknown server protocol\n");
 		exit(1);
 	}
+	*/
 
 	// Protocol completed, now connected
 	sendMessage(sock, a);
@@ -142,7 +191,13 @@ int main(int argc, char **argv) {
 			wmove(inputW, 1, 1);
 
 			if (strlen(command) > 0) {
-				handleCommand(command);
+				msg_command *mc = malloc(sizeof(msg_command));
+				if (mc == NULL) {
+					fprintf(stderr, "Error allocating memory\n");
+					exit(1);
+				}
+				mqueue_enqueue(events, (void *)mc, sizeof(msg_command));
+				//handleCommand(command);
 			}
 		} else if (c == 127) {
 			if (pos > 0) {
@@ -215,7 +270,7 @@ static void sendMessage(int sock, const char *msg) {
 static int receiveMessage(int sock, char **msg) {
 	int ret = readMessage(sock, (void *)msg);
 
-	logMessage(*msg, SERVER);
+	//logMessage(*msg, SERVER);
 
 	return ret;
 }
@@ -229,32 +284,62 @@ static void handleCommand(char *command) {
 			cleanup(0);
 			break;
 
+		case C_SYNACK:
+			break;
+
 		case C_GET:
 			if (cinfo->param == P_POSTS) {
 				sendMessage(sock, command);
-				receiveMessage(sock, &buff);
 				free(buff);
 			} else if (cinfo->param == P_POST) {
 				sendMessage(sock, command);
-				receiveMessage(sock, &buff);
-				freeCommandInfo(cinfo);
-				cinfo = parseCommand(buff, MSG_INCOMING);
-				free(buff);
-
-				if (cinfo->argCount >= 4) {
-					logMessage(cinfo->args[3], CLIENT);
-				}
-			} else {
-				logMessage(command, CLIENT);
 			}
 			break;
 
 		default:
 			sendMessage(sock, command);
-			receiveMessage(sock, &buff);
-			free(buff);
 			break;
 	}
 
 	freeCommandInfo(cinfo);
+}
+
+static void *networkThread(void *args) {
+	thread_args *a = (thread_args *)args;
+	char *msg;
+	LOG("Network thread started\n");
+
+	while (1) {
+		receiveMessage(a->sock, &msg);
+		msg_command *mc = malloc(sizeof(msg_command));
+		if (mc == NULL) {
+			fprintf(stderr, "Error allocating memory\n");
+			exit(1);
+		}
+		mc->source = MSG_OUTGOING;
+		mc->command = msg;
+		LOG("Adding %s to queue\n", msg);
+		mqueue_enqueue(a->events, (void *)mc, sizeof(msg_command));
+		free(mc);
+		free(msg);
+	}
+
+	return NULL;
+}
+
+static void *eventThread(void *args) {
+	thread_args *a = (thread_args *)args;
+	LOG("Event thread started\n");
+
+	while (1) {
+		msg_command *command = mqueue_dequeue(a->events);
+		if (command->source == MSG_INCOMING) {
+			logMessage(command->command, SERVER);
+		} else {
+			handleCommand(command->command);
+		}
+		free(command);
+	}
+
+	return NULL;
 }
