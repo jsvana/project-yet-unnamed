@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/types.h>
+
 // Best make sure these exist
 #ifndef TRUE
 #define TRUE 1

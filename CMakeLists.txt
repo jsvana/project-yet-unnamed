@@ -30,6 +30,10 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --std=gnu99 -Wall -Wno-sign-compare")
 pkg_check_modules(LUA REQUIRED lua)
 find_package(MySQL REQUIRED)
 
+include_directories(
+	${MYSQL_INCLUDE_DIR}
+)
+
 add_executable(
 	bbs-server
 
@@ -64,6 +68,7 @@ target_link_libraries(
 	bbs-client
 
 	ncurses
+	pthread
 )
 
 target_link_libraries(

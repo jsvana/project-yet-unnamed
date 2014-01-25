@@ -1,8 +1,8 @@
 CC=clang
 
-CFLAGS=-g -D_GNU_SOURCE
 MYSQL_CFLAGS=$(shell mysql_config --cflags)
 MYSQL_LIBS=$(shell mysql_config --libs)
+CFLAGS=-g -D_GNU_SOURCE $(MYSQL_CFLAGS)
 
 S_PROG=build/bbs-server
 S_OBJS=src/server_main.o src/common.o src/bbs_mysql.o
@@ -11,7 +11,7 @@ S_LIBS=$(MYSQL_LIBS)
 
 C_PROG=build/bbs-client
 C_OBJS=src/client_main.o src/common.o src/utils/mqueue.o
-C_LIBS=-lncurses
+C_LIBS=-lncurses -lpthread
 
 SEED_PROG=build/seed
 SEED_OBJS=src/seed.o src/common.o src/bbs_mysql.o
