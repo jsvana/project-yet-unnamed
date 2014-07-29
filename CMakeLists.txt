@@ -24,7 +24,7 @@ if(DEBUG)
 endif()
 
 # Make sure we get all warnings and that we're using C++11
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --std=gnu99 -Wall -Wno-sign-compare")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb --std=gnu99 -Wall -Wno-sign-compare")
 
 # Look up libraries
 pkg_check_modules(LUA REQUIRED lua)
@@ -44,7 +44,7 @@ add_executable(
 
 add_executable(
 	bbs-client
-	
+
 	src/client_main.c
 	src/common.c
 	src/utils/mqueue.c
@@ -52,7 +52,7 @@ add_executable(
 
 add_executable(
 	seed
-	
+
 	src/seed.c
 	src/common.c
 	src/bbs_mysql.c

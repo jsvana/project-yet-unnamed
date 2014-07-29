@@ -121,6 +121,7 @@ static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 		ip >> 16 & 255, ip >> 8 & 255, ip & 255);
 
 	readMessage(sock, (void *)&buff);
+	LOG("Received \"%s\"\n", buff);
 	cinfo = parseCommand(buff, MSG_INCOMING);
 	free(buff);
 	if (cinfo->command != C_SYN) {
@@ -132,6 +133,7 @@ static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 	writeMessage(sock, (void *)sa, strlen(sa));
 
 	readMessage(sock, (void *)&buff);
+	LOG("Received \"%s\"\n", buff);
 	cinfo = parseCommand(buff, MSG_INCOMING);
 	free(buff);
 	if (cinfo->command != C_ACK) {
@@ -174,8 +176,7 @@ static void clientFunc(int sock, struct sockaddr_in *sockInfo) {
 static void handleCommand(int sock, char *command) {
 	LOG("Received \"%s\"\n", command);
 	commandinfo *cinfo = parseCommand(command, MSG_INCOMING);
-	char *msg;
-	int len, id;
+	int id;
 	MYSQL_RES *res;
 	MYSQL_ROW row;
 	char *ret;
@@ -220,7 +221,6 @@ static void handleCommand(int sock, char *command) {
 						sendString(sock, "ERROR");
 					} else {
 						id = atoi(cinfo->args[2]);
-						char *sql;
 						res = bbs_queryf(conn, "SELECT `u`.`username`, `p`.`title`,"
 								" `p`.`content` FROM `posts` `p` LEFT JOIN `users` `u`"
 								" ON `p`.`creator_id`=`u`.`id` WHERE `p`.`id`=%d", id);

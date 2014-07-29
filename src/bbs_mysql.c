@@ -11,7 +11,7 @@ MYSQL_RES *bbs_queryf(MYSQL *conn, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
 	char *sql;
-	int len = vasprintf(&sql, fmt, ap);
+	vasprintf(&sql, fmt, ap);
 	va_end(ap);
 	if (sql == NULL) {
 		ERR("Error allocating memory\n");

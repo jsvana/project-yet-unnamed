@@ -21,11 +21,13 @@ int sock;
 WINDOW *dispW;
 WINDOW *inputW;
 mqueue *events;
+mqueue *dispEvents;
 
 typedef struct thread_args thread_args;
 struct thread_args {
 	int sock;
 	mqueue *events;
+	mqueue *dispEvents;
 };
 
 typedef struct msg_command msg_command;
@@ -80,11 +82,6 @@ static void *networkThread(void *args);
 static void *eventThread(void *args);
 
 int main(int argc, char **argv) {
-	char *buff;
-	char *s = "SYN";
-	char *a = "ACK";
-	commandinfo *cinfo;
-
 	if (argc < 3) {
 		fprintf(stderr, "Usage: %s: <ip> <port>\n", argv[0]);
 		exit(1);
@@ -114,58 +111,13 @@ int main(int argc, char **argv) {
 	dispW = newwin(h - 2, w, 0, 0);
 	inputW = newwin(2, w, h - 2, 0);
 
+	nodelay(inputW, TRUE);
 	scrollok(dispW, TRUE);
 
 	sock = joinServer(argv[1], atoi(argv[2]));
 
 	signal(SIGINT, cleanup);
-
-	// Create event thread
-	pthread_t networkThreadID;
-	thread_args *args = malloc(sizeof(thread_args));
-	if (args == NULL) {
-		fprintf(stderr, "Error allocating memory\n");
-		exit(1);
-	}
-	args->events = events;
-	args->sock = sock;
-	printf("sock: %d\n", sock);
-	if (pthread_create(&networkThreadID, NULL, networkThread, (void *)args)) {
-		fprintf(stderr, "Error creating thread\n");
-		exit(1);
-	}
-
-	pthread_t eventThreadID;
-	args = malloc(sizeof(thread_args));
-	if (args == NULL) {
-		fprintf(stderr, "Error allocating memory\n");
-		exit(1);
-	}
-	args->events = events;
-	args->sock = sock;
-	printf("sock: %d\n", sock);
-	if (pthread_create(&eventThreadID, NULL, eventThread, (void *)args)) {
-		fprintf(stderr, "Error creating thread\n");
-		exit(1);
-	}
-
-	sendMessage(sock, s);
-
-	/*
-	if (!receiveMessage(sock, &buff)) {
-		LOG("Server disconnected\n");
-		cleanup(0);
-	}
-	cinfo = parseCommand(buff, MSG_INCOMING);
-	free(buff);
-	if (cinfo->command != C_SYNACK) {
-		fprintf(stderr, "Unknown server protocol\n");
-		exit(1);
-	}
-	*/
-
-	// Protocol completed, now connected
-	sendMessage(sock, a);
+	signal(SIGSEGV, cleanup);
 
 	mvwaddch(inputW, 0, 0, ACS_ULCORNER);
 	for (int i = 1; i < w; i++) {
@@ -177,38 +129,73 @@ int main(int argc, char **argv) {
 	char command[256];
 	memset(command, 0, 256);
 
+	events = mqueue_create();
+	dispEvents = mqueue_create();
+
+	// Create event thread
+	pthread_t networkThreadID;
+	thread_args *args = malloc(sizeof(thread_args));
+	if (args == NULL) {
+		fprintf(stderr, "Error allocating memory\n");
+		exit(1);
+	}
+	args->sock = sock;
+	args->events = events;
+	args->dispEvents = dispEvents;
+	if (pthread_create(&networkThreadID, NULL, networkThread, (void *)args)) {
+		fprintf(stderr, "Error creating thread\n");
+		exit(1);
+	}
+
+	pthread_t eventThreadID;
+	if (pthread_create(&eventThreadID, NULL, eventThread, (void *)args)) {
+		fprintf(stderr, "Error creating thread\n");
+		exit(1);
+	}
+	free(args);
+
+	sendMessage(sock, "SYN");
+
 	while (1) {
-		char c = mvwgetch(inputW, 1, pos + 1);
+		//char c = mvwgetch(inputW, 1, pos + 1);
+		char c = wgetch(inputW);
 
-		// Check enter
-		if (c == 13) {
-			for (int i = 1; i <= pos; i++) {
-				mvwaddch(inputW, 1, i, ' ');
-			}
-
-			command[pos] = 0;
-			pos = 0;
-			wmove(inputW, 1, 1);
-
-			if (strlen(command) > 0) {
-				msg_command *mc = malloc(sizeof(msg_command));
-				if (mc == NULL) {
-					fprintf(stderr, "Error allocating memory\n");
-					exit(1);
-				}
-				mqueue_enqueue(events, (void *)mc, sizeof(msg_command));
-				//handleCommand(command);
-			}
-		} else if (c == 127) {
-			if (pos > 0) {
-				--pos;
-				mvwaddch(inputW, 1, pos + 1, ' ');
-				command[pos] = 0;
+		if (c == ERR) { // Run through display events
+			while (!mqueue_is_empty(dispEvents)) {
+				char *e = mqueue_dequeue(dispEvents);
+				logMessage(e, CLIENT);
+				free(e);
 			}
 		} else {
-			mvwaddch(inputW, 1, pos + 1, c);
-			command[pos] = c;
-			++pos;
+			// Check enter
+			if (c == 13) {
+				for (int i = 1; i <= pos; i++) {
+					mvwaddch(inputW, 1, i, ' ');
+				}
+
+				command[pos] = 0;
+				pos = 0;
+				wmove(inputW, 1, 1);
+
+				if (strlen(command) > 0) {
+					msg_command *mc = malloc(sizeof(msg_command));
+					if (mc == NULL) {
+						fprintf(stderr, "Error allocating memory\n");
+						exit(1);
+					}
+					mqueue_enqueue(events, (void *)mc, sizeof(msg_command));
+				}
+			} else if (c == 127) { // Check backspace
+				if (pos > 0) {
+					--pos;
+					mvwaddch(inputW, 1, pos + 2, ' ');
+					command[pos] = 0;
+				}
+			} else {
+				mvwaddch(inputW, 1, pos + 1, c);
+				command[pos] = c;
+				++pos;
+			}
 		}
 	}
 
@@ -219,6 +206,8 @@ int main(int argc, char **argv) {
 
 static void cleanup(int sig) {
 	close(sock);
+	mqueue_free(events);
+	mqueue_free(dispEvents);
 
 	endwin();
 
@@ -271,12 +260,12 @@ static int receiveMessage(int sock, char **msg) {
 	int ret = readMessage(sock, (void *)msg);
 
 	//logMessage(*msg, SERVER);
+	mqueue_enqueue(dispEvents, *msg, ret * sizeof(char));
 
 	return ret;
 }
 
 static void handleCommand(char *command) {
-	char *buff;
 	commandinfo *cinfo = parseCommand(command, MSG_OUTGOING);
 
 	switch (cinfo->command) {
@@ -285,12 +274,12 @@ static void handleCommand(char *command) {
 			break;
 
 		case C_SYNACK:
+			sendMessage(sock, "ACK");
 			break;
 
 		case C_GET:
 			if (cinfo->param == P_POSTS) {
 				sendMessage(sock, command);
-				free(buff);
 			} else if (cinfo->param == P_POST) {
 				sendMessage(sock, command);
 			}
@@ -307,7 +296,7 @@ static void handleCommand(char *command) {
 static void *networkThread(void *args) {
 	thread_args *a = (thread_args *)args;
 	char *msg;
-	LOG("Network thread started\n");
+	mqueue_enqueue(a->dispEvents, "Network thread started", 23 * sizeof(char));
 
 	while (1) {
 		receiveMessage(a->sock, &msg);
@@ -318,7 +307,6 @@ static void *networkThread(void *args) {
 		}
 		mc->source = MSG_OUTGOING;
 		mc->command = msg;
-		LOG("Adding %s to queue\n", msg);
 		mqueue_enqueue(a->events, (void *)mc, sizeof(msg_command));
 		free(mc);
 		free(msg);
@@ -329,12 +317,12 @@ static void *networkThread(void *args) {
 
 static void *eventThread(void *args) {
 	thread_args *a = (thread_args *)args;
-	LOG("Event thread started\n");
+	mqueue_enqueue(a->dispEvents, "Event thread started", 21 * sizeof(char));
 
 	while (1) {
 		msg_command *command = mqueue_dequeue(a->events);
 		if (command->source == MSG_INCOMING) {
-			logMessage(command->command, SERVER);
+			mqueue_enqueue(a->dispEvents, command->command, strlen(command->command));
 		} else {
 			handleCommand(command->command);
 		}
